@@ -13,10 +13,8 @@ test('accepts one live heading and ignores fenced examples', () => {
 });
 
 test('flages each extra heading on its own line, including CRLF documents', () => {
-	const issues = scanReleaseNotes('# Changelog\n## [Unreleased]\r\n## [1.0.0]\r\n## [1.1.0]');
-	assert.equal(issues.length, 2);
-	assert.equal(issues[0].code, 'extra-unreleased');
-	assert.equal(issues[0].line, 2);
-	assert.equal(issues[1].code, 'extra-unreleased');
-	assert.equal(issues[1].line, 3);
+	const issues = scanReleaseNotes('# Changelog\r\n## [Unreleased]\r\n## [Unreleased]');
+	assert.deepEqual(issues.map(({ line, code }) => [ line, code ]),
+		[[2, 'duplicate-unreleased']],
+	);
 });
