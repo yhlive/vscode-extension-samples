@@ -1,0 +1,104 @@
+diff --git a/code-actions-sample/src/extension.ts b/code-actions-sample/src/extension.ts
+index c8f5af3b86f37f7b53fe8d07e23d36eaeb1667a5..8f57e233b356e7d2eddec3ee394e5d5248311056 100644
+--- a/code-actions-sample/src/extension.ts
++++ b/code-actions-sample/src/extension.ts
+@@ -1,8 +1,14 @@
+ import * as vscode from 'vscode';
++import { ReleaseQuickFix } from './releaseQuickFix';
+ import { subscribeToDocumentChanges } from './diagnostics';
+ 
+ export function activate(context: vscode.ExtensionContext): void {
+   const collection = vscode.languages.createDiagnosticCollection('release-checklist');
+   context.subscriptions.push(collection);
+   subscribeToDocumentChanges(context, collection);
++  context.subscriptions.push(vscode.languages.registerCodeActionsProvider(
++    { language: 'markdown' },
++    new ReleaseQuickFix(),
++    { providedCodeActionKinds: [ReleaseQuickFix.kind] },
++  ));
+ }
+diff --git a/code-actions-sample/src/releaseFix.ts b/code-actions-sample/src/releaseFix.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..b6f5894fcf96829b5d5f3addf6148ce07cafbc6b
+--- /dev/null
++++ b/code-actions-sample/src/releaseFix.ts
+@@ -0,0 +1,13 @@
++import { missingUnreleased, scanReleaseNotes } from './releaseRules';
++
++export function unreleasedInsertion(text: string, eol: string):
++  { offset: number; text: string } | undefined {
++  if (!scanReleaseNotes(text).some((issue) => issue.code === missingUnreleased)) {
++    return;
++  }
++  const heading = /^# [^\r\n]+/.exec(text);
++  const offset = heading ? heading[0].length : 0;
++  const prefix = heading ? eol + eol : '';
++  const suffix = !heading && text ? eol + eol : eol;
++  return { offset, text: prefix + '## [Unreleased]' + suffix };
++}
+diff --git a/code-actions-sample/src/releaseQuickFix.ts b/code-actions-sample/src/releaseQuickFix.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..6871ef4dce03bbb209b792f217d25d4c994b458a
+--- /dev/null
++++ b/code-actions-sample/src/releaseQuickFix.ts
+@@ -0,0 +1,33 @@
++import * as vscode from 'vscode';
++import { isChangelog, releaseSource } from './diagnostics';
++import { unreleasedInsertion } from './releaseFix';
++import { missingUnreleased } from './releaseRules';
++
++export class ReleaseQuickFix implements vscode.CodeActionProvider {
++  static readonly kind = vscode.CodeActionKind.QuickFix;
++
++  provideCodeActions(
++    document: vscode.TextDocument,
++    _range: vscode.Range,
++    context: vscode.CodeActionContext,
++  ): vscode.CodeAction[] {
++    const diagnostic = context.diagnostics.find(
++      (issue) => issue.source === releaseSource && issue.code === missingUnreleased,
++    );
++    if (!diagnostic || !isChangelog(document)) {
++      return [];
++    }
++    const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
++    const insertion = unreleasedInsertion(document.getText(), eol);
++    if (!insertion) {
++      return [];
++    }
++
++    const action = new vscode.CodeAction('Add Unreleased section', ReleaseQuickFix.kind);
++    action.diagnostics = [diagnostic];
++    action.isPreferred = true;
++    action.edit = new vscode.WorkspaceEdit();
++    action.edit.insert(document.uri, document.positionAt(insertion.offset), insertion.text);
++    return [action];
++  }
++}
+diff --git a/code-actions-sample/tests/release-fix.test.mjs b/code-actions-sample/tests/release-fix.test.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..8982295e0d2351ba4ad2926a498a56ebb362e069
+--- /dev/null
++++ b/code-actions-sample/tests/release-fix.test.mjs
+@@ -0,0 +1,21 @@
++import assert from 'node:assert/strict';
++import { test } from 'node:test';
++import { unreleasedInsertion } from '../out/releaseFix.js';
++
++test('inserts after the title with the document line endings', () => {
++  const input = '# Changelog\r\n\r\n## [1.1.0]';
++  const edit = unreleasedInsertion(input, '\r\n');
++  assert.equal(edit.offset, '# Changelog'.length);
++  assert.equal(edit.text, '\r\n\r\n## [Unreleased]\r\n');
++});
++
++test('creates a heading for an empty document', () => {
++  assert.deepEqual(unreleasedInsertion('', '\n'), {
++    offset: 0,
++    text: '## [Unreleased]\n',
++  });
++});
++
++test('does not propose a second edit after a live heading already exists', () => {
++  assert.equal(unreleasedInsertion('## [Unreleased]', '\n'), undefined);
++});

@@ -1,0 +1,173 @@
+diff --git a/code-actions-sample/.vscodeignore b/code-actions-sample/.vscodeignore
+new file mode 100644
+index 0000000000000000000000000000000000000000..a096735d077064cd8ae40b12c5e3e7c914ebf9e9
+--- /dev/null
++++ b/code-actions-sample/.vscodeignore
+@@ -0,0 +1,8 @@
++.gitignore
++.vscode/**
++src/**
++tests/**
++tsconfig.json
++eslint.config.mjs
++example*.gif
++**/*.vsix
+diff --git a/code-actions-sample/LICENSE b/code-actions-sample/LICENSE
+new file mode 100644
+index 0000000000000000000000000000000000000000..0ac28ee234d232ac0691f39cebf95bf6b2a763a5
+--- /dev/null
++++ b/code-actions-sample/LICENSE
+@@ -0,0 +1,21 @@
++MIT License
++
++Copyright (c) 2015 - present Microsoft Corporation
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++SOFTWARE.
+diff --git a/code-actions-sample/README.md b/code-actions-sample/README.md
+index 57b0fa66c66ec6f67539a511f62b06a15b0d7b5a..5325b8e31dd8d722cc79f07b2dd9d178e9faebf3 100644
+--- a/code-actions-sample/README.md
++++ b/code-actions-sample/README.md
+@@ -1,19 +1,9 @@
+-# Code Action Provider Sample
++# Release Checklist
+ 
+-This sample shows how to provide code actions in the editor. Code actions are used to implement quick fixes and [refactoring](https://code.visualstudio.com/docs/editor/refactoring) in VS Code.
++This VS Code extension checks open Markdown files named `CHANGELOG.md` for a
++single Unreleased heading. Open Problems or the Release Checklist view in
++Explorer to review issues. Use the Add Unreleased section Quick Fix to repair
++a missing heading.
+ 
+-The sample uses the [`CodeActionProvider`](https://code.visualstudio.com/api/references/vscode-api#CodeActionProvider) api to implement a simple set of code actions that convert `:)` to a smiley emoji in markdown files:
+-
+-![Emoji code actions](example.gif)
+-
+-Second example of code action provider shows how to associate code actions with diagnostic (e.g. compilation) problems.
+-
+-![Diagnostic code actions](example_diagnostic.gif)
+-
+-## VS Code API
+-
+-### `vscode` module
+-
+-- [`languages.registerCodeActionsProvider`](https://code.visualstudio.com/api/references/vscode-api#languages.registerCodeActionsProvider)
+-- [`Diagnostic.code`](https://code.visualstudio.com/api/references/vscode-api#Diagnostic)
+-- [`CodeActionContext.diagnostics`](https://code.visualstudio.com/api/references/vscode-api#CodeActionContext)
++Based on Microsoft's Code Actions Provider sample. Distributed under the
++included MIT license.
+diff --git a/code-actions-sample/package.json b/code-actions-sample/package.json
+index 80ad4eb3f0b069d362089d1cd82302f90abd9c52..15e8caa4e9fcd45e8a8160cdc4a13b11910ff895 100644
+--- a/code-actions-sample/package.json
++++ b/code-actions-sample/package.json
+@@ -1,9 +1,10 @@
+ {
+ 	"name": "code-actions-sample",
+ 	"private": true,
+-	"displayName": "Code Actions Provider Sample",
++	"displayName": "Release Checklist",
++	"description": "Review and fix Markdown changelog headings.",
+ 	"version": "0.0.2",
+-	"publisher": "vscode-samples",
++	"publisher": "release-workshop",
+ 	"repository": {
+ 		"type": "git",
+ 		"url": "https://github.com/Microsoft/vscode-extension-samples"
+@@ -21,6 +22,16 @@
+ 		"onLanguage:markdown"
+ 	],
+ 	"main": "./out/extension.js",
++	"contributes": {
++		"views": {
++			"explorer": [
++				{ "id": "release-checklist", "name": "Release Checklist" }
++			]
++		},
++		"viewsWelcome": [
++			{ "view": "release-checklist", "contents": "Open a CHANGELOG.md file to see release checklist issues." }
++		]
++	},
+ 	"scripts": {
+ 		"vscode:prepublish": "npm run compile",
+ 		"compile": "tsc -p ./",
+diff --git a/code-actions-sample/src/extension.ts b/code-actions-sample/src/extension.ts
+index 8f57e233b356e7d2eddec3ee394e5d5248311056..1cd4d9e49995d76e191839fa45a0193571347f5c 100644
+--- a/code-actions-sample/src/extension.ts
++++ b/code-actions-sample/src/extension.ts
+@@ -1,11 +1,17 @@
+ import * as vscode from 'vscode';
+ import { ReleaseQuickFix } from './releaseQuickFix';
++import { ReleaseSidebar } from './releaseSidebar';
+ import { subscribeToDocumentChanges } from './diagnostics';
+ 
+ export function activate(context: vscode.ExtensionContext): void {
+   const collection = vscode.languages.createDiagnosticCollection('release-checklist');
+   context.subscriptions.push(collection);
+   subscribeToDocumentChanges(context, collection);
++  const sidebar = new ReleaseSidebar();
++  context.subscriptions.push(
++    sidebar,
++    vscode.window.registerTreeDataProvider('release-checklist', sidebar),
++  );
+   context.subscriptions.push(vscode.languages.registerCodeActionsProvider(
+     { language: 'markdown' },
+     new ReleaseQuickFix(),
+diff --git a/code-actions-sample/src/releaseSidebar.ts b/code-actions-sample/src/releaseSidebar.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..74a3405c2be994ea055f6162a7576dcc7d6ad5a4
+--- /dev/null
++++ b/code-actions-sample/src/releaseSidebar.ts
+@@ -0,0 +1,39 @@
++import * as vscode from 'vscode';
++import { releaseSource } from './diagnostics';
++
++export class ReleaseSidebar implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.Disposable {
++  private readonly changed = new vscode.EventEmitter<void>();
++  private readonly diagnosticSubscription = vscode.languages.onDidChangeDiagnostics(
++    () => this.changed.fire(),
++  );
++  readonly onDidChangeTreeData = this.changed.event;
++
++  getTreeItem(item: vscode.TreeItem): vscode.TreeItem {
++    return item;
++  }
++
++  getChildren(): vscode.TreeItem[] {
++    return vscode.languages.getDiagnostics().flatMap(([uri, diagnostics]) =>
++      diagnostics.filter(({ source }) => source === releaseSource).map((diagnostic) => {
++        const location = vscode.workspace.asRelativePath(uri);
++        const item = new vscode.TreeItem(diagnostic.message);
++        item.description = `${location}:${diagnostic.range.start.line + 1}`;
++        item.tooltip = `${item.description} — ${diagnostic.message}`;
++        item.iconPath = new vscode.ThemeIcon(
++          diagnostic.severity === vscode.DiagnosticSeverity.Error ? 'error' : 'warning',
++        );
++        item.command = {
++          command: 'vscode.open',
++          title: 'Open changelog issue',
++          arguments: [uri, { selection: diagnostic.range }],
++        };
++        return item;
++      }),
++    );
++  }
++
++  dispose(): void {
++    this.diagnosticSubscription.dispose();
++    this.changed.dispose();
++  }
++}
