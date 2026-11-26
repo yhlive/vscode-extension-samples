@@ -1,67 +1,36 @@
-/*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
- *--------------------------------------------------------*/
-
-/** To demonstrate code actions associated with Diagnostics problems, this file provides a mock diagnostics entries. */
-
 import * as vscode from 'vscode';
+import { scanReleaseNotes } from './releaseRules';
 
-/** Code that is used to associate diagnostic entries with code actions. */
-export const EMOJI_MENTION = 'emoji_mention';
 
-/** String to detect in the text document. */
-const EMOJI = 'emoji';
+export const releaseSource = 'Release Checklist';
+export function isChangelog(document: vscode.TextDocument): boolean {
+	return document.languageId === 'markdown' &&
+		/(?:^|\/)CHANGELOG\.md$/i.test(document.uri.path);
+}
 
-/**
- * Analyzes the text document for problems. 
- * This demo diagnostic problem provider finds all mentions of 'emoji'.
- * @param doc text document to analyze
- * @param emojiDiagnostics diagnostic collection
- */
-export function refreshDiagnostics(doc: vscode.TextDocument, emojiDiagnostics: vscode.DiagnosticCollection): void {
-	const diagnostics: vscode.Diagnostic[] = [];
-
-	for (let lineIndex = 0; lineIndex < doc.lineCount; lineIndex++) {
-		const lineOfText = doc.lineAt(lineIndex);
-		if (lineOfText.text.includes(EMOJI)) {
-			diagnostics.push(createDiagnostic(doc, lineOfText, lineIndex));
+export function subscribeToDocumentChanges(context: vscode.ExtensionContext, collection: vscode.DiagnosticCollection): void {
+	function refresh(document: vscode.TextDocument): void {
+		if (!isChangelog(document)) {
+			collection.delete(document.uri);
+			return;
 		}
+		const diagnostics = scanReleaseNotes(document.getText()).map((issue) => {
+			const diagnostic = new vscode.Diagnostic(
+				document.lineAt(issue.line).range,
+				issue.message,
+				issue.warning ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error
+			);
+			diagnostic.code = issue.code;
+			diagnostic.source = releaseSource;
+			return diagnostic;
+		});
+		collection.set(document.uri, diagnostics);
 	}
 
-	emojiDiagnostics.set(doc.uri, diagnostics);
-}
-
-function createDiagnostic(doc: vscode.TextDocument, lineOfText: vscode.TextLine, lineIndex: number): vscode.Diagnostic {
-	// find where in the line of that the 'emoji' is mentioned
-	const index = lineOfText.text.indexOf(EMOJI);
-
-	// create range that represents, where in the document the word is
-	const range = new vscode.Range(lineIndex, index, lineIndex, index + EMOJI.length);
-
-	const diagnostic = new vscode.Diagnostic(range, "When you say 'emoji', do you want to find out more?",
-		vscode.DiagnosticSeverity.Information);
-	diagnostic.code = EMOJI_MENTION;
-	return diagnostic;
-}
-
-export function subscribeToDocumentChanges(context: vscode.ExtensionContext, emojiDiagnostics: vscode.DiagnosticCollection): void {
-	if (vscode.window.activeTextEditor) {
-		refreshDiagnostics(vscode.window.activeTextEditor.document, emojiDiagnostics);
-	}
+	vscode.workspace.textDocuments.forEach(refresh);
 	context.subscriptions.push(
-		vscode.window.onDidChangeActiveTextEditor(editor => {
-			if (editor) {
-				refreshDiagnostics(editor.document, emojiDiagnostics);
-			}
-		})
+		vscode.workspace.onDidOpenTextDocument(refresh),
+		vscode.workspace.onDidChangeTextDocument((event) => refresh(event.document)),
+		vscode.workspace.onDidCloseTextDocument((document) => collection.delete(document.uri))
 	);
-
-	context.subscriptions.push(
-		vscode.workspace.onDidChangeTextDocument(e => refreshDiagnostics(e.document, emojiDiagnostics))
-	);
-
-	context.subscriptions.push(
-		vscode.workspace.onDidCloseTextDocument(doc => emojiDiagnostics.delete(doc.uri))
-	);
-
 }
