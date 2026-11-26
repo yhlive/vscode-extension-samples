@@ -1,0 +1,310 @@
+diff --git a/code-actions-sample/src/diagnostics.ts b/code-actions-sample/src/diagnostics.ts
+index 56acc0ce61acd34cc14f9da3df226778850d5126..02f2466dd2b6968701a864884c1ae38f4b796565 100644
+--- a/code-actions-sample/src/diagnostics.ts
++++ b/code-actions-sample/src/diagnostics.ts
+@@ -1,67 +1,39 @@
+-/*---------------------------------------------------------
+- * Copyright (C) Microsoft Corporation. All rights reserved.
+- *--------------------------------------------------------*/
+-
+-/** To demonstrate code actions associated with Diagnostics problems, this file provides a mock diagnostics entries. */
+-
+-import * as vscode from 'vscode';
+-
+-/** Code that is used to associate diagnostic entries with code actions. */
+-export const EMOJI_MENTION = 'emoji_mention';
+-
+-/** String to detect in the text document. */
+-const EMOJI = 'emoji';
+-
+-/**
+- * Analyzes the text document for problems. 
+- * This demo diagnostic problem provider finds all mentions of 'emoji'.
+- * @param doc text document to analyze
+- * @param emojiDiagnostics diagnostic collection
+- */
+-export function refreshDiagnostics(doc: vscode.TextDocument, emojiDiagnostics: vscode.DiagnosticCollection): void {
+-	const diagnostics: vscode.Diagnostic[] = [];
+-
+-	for (let lineIndex = 0; lineIndex < doc.lineCount; lineIndex++) {
+-		const lineOfText = doc.lineAt(lineIndex);
+-		if (lineOfText.text.includes(EMOJI)) {
+-			diagnostics.push(createDiagnostic(doc, lineOfText, lineIndex));
+-		}
+-	}
+-
+-	emojiDiagnostics.set(doc.uri, diagnostics);
+-}
+-
+-function createDiagnostic(doc: vscode.TextDocument, lineOfText: vscode.TextLine, lineIndex: number): vscode.Diagnostic {
+-	// find where in the line of that the 'emoji' is mentioned
+-	const index = lineOfText.text.indexOf(EMOJI);
+-
+-	// create range that represents, where in the document the word is
+-	const range = new vscode.Range(lineIndex, index, lineIndex, index + EMOJI.length);
+-
+-	const diagnostic = new vscode.Diagnostic(range, "When you say 'emoji', do you want to find out more?",
+-		vscode.DiagnosticSeverity.Information);
+-	diagnostic.code = EMOJI_MENTION;
+-	return diagnostic;
+-}
+-
+-export function subscribeToDocumentChanges(context: vscode.ExtensionContext, emojiDiagnostics: vscode.DiagnosticCollection): void {
+-	if (vscode.window.activeTextEditor) {
+-		refreshDiagnostics(vscode.window.activeTextEditor.document, emojiDiagnostics);
+-	}
+-	context.subscriptions.push(
+-		vscode.window.onDidChangeActiveTextEditor(editor => {
+-			if (editor) {
+-				refreshDiagnostics(editor.document, emojiDiagnostics);
+-			}
+-		})
+-	);
+-
+-	context.subscriptions.push(
+-		vscode.workspace.onDidChangeTextDocument(e => refreshDiagnostics(e.document, emojiDiagnostics))
+-	);
+-
+-	context.subscriptions.push(
+-		vscode.workspace.onDidCloseTextDocument(doc => emojiDiagnostics.delete(doc.uri))
+-	);
+-
+-}
+\ No newline at end of file
++import * as vscode from 'vscode';
++import { scanReleaseNotes } from './releaseRules';
++
++export const releaseSource = 'Release Checklist';
++
++export function isChangelog(document: vscode.TextDocument): boolean {
++  return document.languageId === 'markdown' &&
++    /(?:^|\/)CHANGELOG\.md$/i.test(document.uri.path);
++}
++
++export function subscribeToDocumentChanges(
++  context: vscode.ExtensionContext,
++  collection: vscode.DiagnosticCollection,
++): void {
++  function refresh(document: vscode.TextDocument): void {
++    if (!isChangelog(document)) {
++      collection.delete(document.uri);
++      return;
++    }
++    const diagnostics = scanReleaseNotes(document.getText()).map((issue) => {
++      const diagnostic = new vscode.Diagnostic(
++        document.lineAt(issue.line).range,
++        issue.message,
++        issue.warning ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error,
++      );
++      diagnostic.code = issue.code;
++      diagnostic.source = releaseSource;
++      return diagnostic;
++    });
++    collection.set(document.uri, diagnostics);
++  }
++
++  vscode.workspace.textDocuments.forEach(refresh);
++  context.subscriptions.push(
++    vscode.workspace.onDidOpenTextDocument(refresh),
++    vscode.workspace.onDidChangeTextDocument((event) => refresh(event.document)),
++    vscode.workspace.onDidCloseTextDocument((document) => collection.delete(document.uri)),
++  );
++}
+diff --git a/code-actions-sample/src/extension.ts b/code-actions-sample/src/extension.ts
+index 7c828a3b94f9cd8d58c901a56a4c6c11f47569b9..c8f5af3b86f37f7b53fe8d07e23d36eaeb1667a5 100644
+--- a/code-actions-sample/src/extension.ts
++++ b/code-actions-sample/src/extension.ts
+@@ -1,108 +1,8 @@
+-/*---------------------------------------------------------
+- * Copyright (C) Microsoft Corporation. All rights reserved.
+- *--------------------------------------------------------*/
+-
+-import * as vscode from 'vscode';
+-import { subscribeToDocumentChanges, EMOJI_MENTION } from './diagnostics';
+-
+-const COMMAND = 'code-actions-sample.command';
+-
+-export function activate(context: vscode.ExtensionContext) {
+-	context.subscriptions.push(
+-		vscode.languages.registerCodeActionsProvider('markdown', new Emojizer(), {
+-			providedCodeActionKinds: Emojizer.providedCodeActionKinds
+-		}));
+-
+-	const emojiDiagnostics = vscode.languages.createDiagnosticCollection("emoji");
+-	context.subscriptions.push(emojiDiagnostics);
+-
+-	subscribeToDocumentChanges(context, emojiDiagnostics);
+-
+-	context.subscriptions.push(
+-		vscode.languages.registerCodeActionsProvider('markdown', new Emojinfo(), {
+-			providedCodeActionKinds: Emojinfo.providedCodeActionKinds
+-		})
+-	);
+-
+-	context.subscriptions.push(
+-		vscode.commands.registerCommand(COMMAND, () => vscode.env.openExternal(vscode.Uri.parse('https://unicode.org/emoji/charts-12.0/full-emoji-list.html')))
+-	);
+-}
+-
+-/**
+- * Provides code actions for converting :) to a smiley emoji.
+- */
+-export class Emojizer implements vscode.CodeActionProvider {
+-
+-	public static readonly providedCodeActionKinds = [
+-		vscode.CodeActionKind.QuickFix
+-	];
+-
+-	public provideCodeActions(document: vscode.TextDocument, range: vscode.Range): vscode.CodeAction[] | undefined {
+-		if (!this.isAtStartOfSmiley(document, range)) {
+-			return;
+-		}
+-
+-		const replaceWithSmileyCatFix = this.createFix(document, range, '😺');
+-
+-		const replaceWithSmileyFix = this.createFix(document, range, '😀');
+-		// Marking a single fix as `preferred` means that users can apply it with a
+-		// single keyboard shortcut using the `Auto Fix` command.
+-		replaceWithSmileyFix.isPreferred = true;
+-
+-		const replaceWithSmileyHankyFix = this.createFix(document, range, '💩');
+-
+-		const commandAction = this.createCommand();
+-
+-		return [
+-			replaceWithSmileyCatFix,
+-			replaceWithSmileyFix,
+-			replaceWithSmileyHankyFix,
+-			commandAction
+-		];
+-	}
+-
+-	private isAtStartOfSmiley(document: vscode.TextDocument, range: vscode.Range) {
+-		const start = range.start;
+-		const line = document.lineAt(start.line);
+-		return line.text[start.character] === ':' && line.text[start.character + 1] === ')';
+-	}
+-
+-	private createFix(document: vscode.TextDocument, range: vscode.Range, emoji: string): vscode.CodeAction {
+-		const fix = new vscode.CodeAction(`Convert to ${emoji}`, vscode.CodeActionKind.QuickFix);
+-		fix.edit = new vscode.WorkspaceEdit();
+-		fix.edit.replace(document.uri, new vscode.Range(range.start, range.start.translate(0, 2)), emoji);
+-		return fix;
+-	}
+-
+-	private createCommand(): vscode.CodeAction {
+-		const action = new vscode.CodeAction('Learn more...', vscode.CodeActionKind.Empty);
+-		action.command = { command: COMMAND, title: 'Learn more about emojis', tooltip: 'This will open the unicode emoji page.' };
+-		return action;
+-	}
+-}
+-
+-/**
+- * Provides code actions corresponding to diagnostic problems.
+- */
+-export class Emojinfo implements vscode.CodeActionProvider {
+-
+-	public static readonly providedCodeActionKinds = [
+-		vscode.CodeActionKind.QuickFix
+-	];
+-
+-	provideCodeActions(_document: vscode.TextDocument, _range: vscode.Range | vscode.Selection, context: vscode.CodeActionContext, _token: vscode.CancellationToken): vscode.CodeAction[] {
+-		// for each diagnostic entry that has the matching `code`, create a code action command
+-		return context.diagnostics
+-			.filter(diagnostic => diagnostic.code === EMOJI_MENTION)
+-			.map(diagnostic => this.createCommandCodeAction(diagnostic));
+-	}
+-
+-	private createCommandCodeAction(diagnostic: vscode.Diagnostic): vscode.CodeAction {
+-		const action = new vscode.CodeAction('Learn more...', vscode.CodeActionKind.QuickFix);
+-		action.command = { command: COMMAND, title: 'Learn more about emojis', tooltip: 'This will open the unicode emoji page.' };
+-		action.diagnostics = [diagnostic];
+-		action.isPreferred = true;
+-		return action;
+-	}
+-}
+\ No newline at end of file
++import * as vscode from 'vscode';
++import { subscribeToDocumentChanges } from './diagnostics';
++
++export function activate(context: vscode.ExtensionContext): void {
++  const collection = vscode.languages.createDiagnosticCollection('release-checklist');
++  context.subscriptions.push(collection);
++  subscribeToDocumentChanges(context, collection);
++}
+diff --git a/code-actions-sample/src/releaseRules.ts b/code-actions-sample/src/releaseRules.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..13a145cab647f6b903dcca2fde0d9cc058b2808d
+--- /dev/null
++++ b/code-actions-sample/src/releaseRules.ts
+@@ -0,0 +1,46 @@
++export const missingUnreleased = 'missing-unreleased';
++export const duplicateUnreleased = 'duplicate-unreleased';
++
++export interface ReleaseIssue {
++  line: number;
++  code: string;
++  message: string;
++  warning: boolean;
++}
++
++export function scanReleaseNotes(text: string): ReleaseIssue[] {
++  const headings: number[] = [];
++  let fence = '';
++  text.split(/\r?\n/).forEach((line, index) => {
++    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
++    if (marker) {
++      if (!fence) {
++        fence = marker[1];
++      } else if (
++        marker[1][0] === fence[0] &&
++        marker[1].length >= fence.length &&
++        !marker[2].trim()
++      ) {
++        fence = '';
++      }
++      return;
++    }
++    if (!fence && /^ {0,3}##\s+(?:\[Unreleased\]|Unreleased)(?:\s+#+)?\s*$/i.test(line)) {
++      headings.push(index);
++    }
++  });
++  if (headings.length === 0) {
++    return [{
++      line: 0,
++      code: missingUnreleased,
++      message: 'Add an Unreleased section.',
++      warning: true,
++    }];
++  }
++  return headings.slice(1).map((line) => ({
++    line,
++    code: duplicateUnreleased,
++    message: 'Keep a single Unreleased section.',
++    warning: false,
++  }));
++}
+diff --git a/code-actions-sample/tests/release.test.mjs b/code-actions-sample/tests/release.test.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f30da0640d67b1b8019b97c58c69bf3ae148cb7f
+--- /dev/null
++++ b/code-actions-sample/tests/release.test.mjs
+@@ -0,0 +1,18 @@
++import assert from 'node:assert/strict';
++import { test } from 'node:test';
++import { scanReleaseNotes } from '../out/releaseRules.js';
++
++test('flags missing heading on the first line', () => {
++  const [issue] = scanReleaseNotes('# Changelog\n## [1.0.0]');
++  assert.equal(issue.code, 'missing-unreleased');
++  assert.equal(issue.line, 0);
++});
++
++test('accepts one live heading and ignores fenced examples', () => {
++  assert.deepEqual(scanReleaseNotes('# Changelog\n~~~md\n## Unreleased\n~~~\n## [Unreleased]'), []);
++});
++
++test('flags each extra heading on its own line, including CRLF documents', () => {
++  const issues = scanReleaseNotes('# Changelog\r\n## [Unreleased]\r\n## Unreleased');
++  assert.deepEqual(issues.map(({ line, code }) => [line, code]), [[2, 'duplicate-unreleased']]);
++});

@@ -1,0 +1,586 @@
+diff --git a/code-actions-sample/.vscode/launch.json b/code-actions-sample/.vscode/launch.json
+index e9e60976a8b067c0798c73885cea6cb0bb19b087..f2570d716b0c8479ec1ce41ad45b0e13cabc9c2c 100644
+--- a/code-actions-sample/.vscode/launch.json
++++ b/code-actions-sample/.vscode/launch.json
+@@ -17,6 +17,21 @@
+ 				"${workspaceFolder}/out/**/*.js"
+ 			],
+ 			"preLaunchTask": "npm: watch"
++		},
++		{
++			"name": "Run Release Checklist Tests",
++			"type": "extensionHost",
++			"request": "launch",
++			"runtimeExecutable": "${execPath}",
++			"args": [
++				"--profile-temp",
++				"--disable-extensions",
++				"--extensionDevelopmentPath=${workspaceFolder}",
++				"--extensionTestsPath=${workspaceFolder}/tests/extension-host.cjs",
++				"${workspaceFolder}"
++			],
++			"outFiles": ["${workspaceFolder}/out/**/*.js"],
++			"preLaunchTask": "npm: compile"
+ 		}
+ 	]
+ }
+diff --git a/code-actions-sample/.vscodeignore b/code-actions-sample/.vscodeignore
+new file mode 100644
+index 0000000000000000000000000000000000000000..0514bf0fc930f00ef90d925cc96418cbff9154fc
+--- /dev/null
++++ b/code-actions-sample/.vscodeignore
+@@ -0,0 +1,9 @@
++.gitignore
++.vscode/**
++src/**
++tests/**
++release-host-*/**
++tsconfig.json
++eslint.config.mjs
++example*.gif
++**/*.vsix
+diff --git a/code-actions-sample/LICENSE b/code-actions-sample/LICENSE
+new file mode 100644
+index 0000000000000000000000000000000000000000..0ac28ee234d232ac0691f39cebf95bf6b2a763a5
+--- /dev/null
++++ b/code-actions-sample/LICENSE
+@@ -0,0 +1,21 @@
++MIT License
++
++Copyright (c) 2015 - present Microsoft Corporation
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++SOFTWARE.
+diff --git a/code-actions-sample/README.md b/code-actions-sample/README.md
+index 57b0fa66c66ec6f67539a511f62b06a15b0d7b5a..6aa4717bc93c8d4da6acf0ba92e98783f2aa57b2 100644
+--- a/code-actions-sample/README.md
++++ b/code-actions-sample/README.md
+@@ -1,19 +1,19 @@
+-# Code Action Provider Sample
++# Release Checklist
+ 
+-This sample shows how to provide code actions in the editor. Code actions are used to implement quick fixes and [refactoring](https://code.visualstudio.com/docs/editor/refactoring) in VS Code.
++Group Markdown changelog issues by file in the **Release Checklist** view in
++Explorer. Open an issue to jump to its line and use **Add Unreleased section**
++when the heading is missing.
+ 
+-The sample uses the [`CodeActionProvider`](https://code.visualstudio.com/api/references/vscode-api#CodeActionProvider) api to implement a simple set of code actions that convert `:)` to a smiley emoji in markdown files:
++Use **Release Checklist: Scan Workspace Changelogs** to audit closed files.
++The command scans up to 200 matching files outside dependency folders, using
++UTF-8 and a 1 MiB limit per file. Rescan after changing a closed file on disk.
++Open editors show their current contents, including unsaved changes.
+ 
+-![Emoji code actions](example.gif)
++## Development
+ 
+-Second example of code action provider shows how to associate code actions with diagnostic (e.g. compilation) problems.
++Run `npm ci`, `npm run compile`, `npm run lint`, and
++`node --test tests/*.test.mjs`. Use **Run Release Checklist Tests** in VS Code
++to run the extension-host integration checks.
+ 
+-![Diagnostic code actions](example_diagnostic.gif)
+-
+-## VS Code API
+-
+-### `vscode` module
+-
+-- [`languages.registerCodeActionsProvider`](https://code.visualstudio.com/api/references/vscode-api#languages.registerCodeActionsProvider)
+-- [`Diagnostic.code`](https://code.visualstudio.com/api/references/vscode-api#Diagnostic)
+-- [`CodeActionContext.diagnostics`](https://code.visualstudio.com/api/references/vscode-api#CodeActionContext)
++Based on Microsoft's Code Actions Provider sample. Distributed under the
++included MIT license.
+diff --git a/code-actions-sample/package-lock.json b/code-actions-sample/package-lock.json
+index 8bbc34786523e8deba5d2837361662188e62afaa..514826372c520d71386b59545eb019904dbc6824 100644
+--- a/code-actions-sample/package-lock.json
++++ b/code-actions-sample/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+ 	"name": "code-actions-sample",
+-	"version": "0.0.2",
++	"version": "0.0.3",
+ 	"lockfileVersion": 2,
+ 	"requires": true,
+ 	"packages": {
+ 		"": {
+ 			"name": "code-actions-sample",
+-			"version": "0.0.2",
++			"version": "0.0.3",
+ 			"devDependencies": {
+ 				"@eslint/js": "^9.13.0",
+ 				"@stylistic/eslint-plugin": "^2.9.0",
+diff --git a/code-actions-sample/package.json b/code-actions-sample/package.json
+index 80ad4eb3f0b069d362089d1cd82302f90abd9c52..f1fa33e325d6a63c65fb3ebfdc46619b10cbe9b4 100644
+--- a/code-actions-sample/package.json
++++ b/code-actions-sample/package.json
+@@ -1,9 +1,10 @@
+ {
+ 	"name": "code-actions-sample",
+ 	"private": true,
+-	"displayName": "Code Actions Provider Sample",
+-	"version": "0.0.2",
+-	"publisher": "vscode-samples",
++	"displayName": "Release Checklist",
++	"description": "Review and fix Markdown changelog headings.",
++	"version": "0.0.3",
++	"publisher": "release-workshop",
+ 	"repository": {
+ 		"type": "git",
+ 		"url": "https://github.com/Microsoft/vscode-extension-samples"
+@@ -21,6 +22,33 @@
+ 		"onLanguage:markdown"
+ 	],
+ 	"main": "./out/extension.js",
++	"contributes": {
++		"commands": [
++			{
++				"command": "releaseChecklist.scanWorkspace",
++				"title": "Scan Workspace Changelogs",
++				"category": "Release Checklist",
++				"icon": "$(refresh)"
++			}
++		],
++		"menus": {
++			"view/title": [
++				{
++					"command": "releaseChecklist.scanWorkspace",
++					"when": "view == release-checklist",
++					"group": "navigation"
++				}
++			]
++		},
++		"views": {
++			"explorer": [
++				{ "id": "release-checklist", "name": "Release Checklist" }
++			]
++		},
++		"viewsWelcome": [
++			{ "view": "release-checklist", "contents": "[Scan Workspace Changelogs](command:releaseChecklist.scanWorkspace)\n\nOpen a CHANGELOG.md file to see live issues." }
++		]
++	},
+ 	"scripts": {
+ 		"vscode:prepublish": "npm run compile",
+ 		"compile": "tsc -p ./",
+diff --git a/code-actions-sample/src/diagnostics.ts b/code-actions-sample/src/diagnostics.ts
+index 02f2466dd2b6968701a864884c1ae38f4b796565..24b22bcd207d8ebf63e77bb7bde1a0e792d7c31b 100644
+--- a/code-actions-sample/src/diagnostics.ts
++++ b/code-actions-sample/src/diagnostics.ts
+@@ -8,32 +8,88 @@ export function isChangelog(document: vscode.TextDocument): boolean {
+     /(?:^|\/)CHANGELOG\.md$/i.test(document.uri.path);
+ }
+ 
+-export function subscribeToDocumentChanges(
+-  context: vscode.ExtensionContext,
+-  collection: vscode.DiagnosticCollection,
+-): void {
+-  function refresh(document: vscode.TextDocument): void {
+-    if (!isChangelog(document)) {
+-      collection.delete(document.uri);
+-      return;
++export interface ScanEntry {
++  uri: vscode.Uri;
++  diagnostics: readonly vscode.Diagnostic[];
++}
++
++export function diagnosticsForText(text: string): vscode.Diagnostic[] {
++  const lines = text.split(/\r?\n/);
++  return scanReleaseNotes(text).map((issue) => {
++    const diagnostic = new vscode.Diagnostic(
++      new vscode.Range(issue.line, 0, issue.line, lines[issue.line].length),
++      issue.message,
++      issue.warning ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error,
++    );
++    diagnostic.code = issue.code;
++    diagnostic.source = releaseSource;
++    return diagnostic;
++  });
++}
++
++export class ReleaseDiagnostics implements vscode.Disposable {
++  private readonly collection = vscode.languages.createDiagnosticCollection('release-checklist');
++  private snapshots = new Map<string, ScanEntry>();
++  private readonly subscriptions: vscode.Disposable[];
++
++  constructor() {
++    this.subscriptions = [
++      vscode.workspace.onDidOpenTextDocument((document) => this.refresh(document)),
++      vscode.workspace.onDidChangeTextDocument(({ document }) => this.refresh(document)),
++      vscode.workspace.onDidSaveTextDocument((document) => this.onSave(document)),
++      vscode.workspace.onDidCloseTextDocument((document) => this.onClose(document)),
++    ];
++    vscode.workspace.textDocuments.forEach((document) => this.refresh(document));
++  }
++
++  replaceWorkspaceScan(entries: readonly ScanEntry[]): void {
++    const open = new Map(vscode.workspace.textDocuments
++      .filter(isChangelog)
++      .map((document) => [document.uri.toString(), document]));
++    const previous = this.snapshots;
++    this.snapshots = new Map(entries.map((entry) => [entry.uri.toString(), entry]));
++
++    for (const [key, entry] of previous) {
++      if (!this.snapshots.has(key) && !open.has(key)) {
++        this.collection.delete(entry.uri);
++      }
++    }
++    for (const [key, entry] of this.snapshots) {
++      const document = open.get(key);
++      if (document) {
++        this.refresh(document);
++      } else {
++        this.collection.set(entry.uri, entry.diagnostics);
++      }
+     }
+-    const diagnostics = scanReleaseNotes(document.getText()).map((issue) => {
+-      const diagnostic = new vscode.Diagnostic(
+-        document.lineAt(issue.line).range,
+-        issue.message,
+-        issue.warning ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error,
+-      );
+-      diagnostic.code = issue.code;
+-      diagnostic.source = releaseSource;
+-      return diagnostic;
+-    });
+-    collection.set(document.uri, diagnostics);
+   }
+ 
+-  vscode.workspace.textDocuments.forEach(refresh);
+-  context.subscriptions.push(
+-    vscode.workspace.onDidOpenTextDocument(refresh),
+-    vscode.workspace.onDidChangeTextDocument((event) => refresh(event.document)),
+-    vscode.workspace.onDidCloseTextDocument((document) => collection.delete(document.uri)),
+-  );
++  dispose(): void {
++    this.subscriptions.forEach((subscription) => subscription.dispose());
++    this.collection.dispose();
++  }
++
++  private refresh(document: vscode.TextDocument): void {
++    if (isChangelog(document)) {
++      this.collection.set(document.uri, diagnosticsForText(document.getText()));
++    }
++  }
++
++  private onSave(document: vscode.TextDocument): void {
++    const key = document.uri.toString();
++    if (isChangelog(document) && this.snapshots.has(key)) {
++      const diagnostics = diagnosticsForText(document.getText());
++      this.snapshots.set(key, { uri: document.uri, diagnostics });
++      this.collection.set(document.uri, diagnostics);
++    }
++  }
++
++  private onClose(document: vscode.TextDocument): void {
++    const snapshot = this.snapshots.get(document.uri.toString());
++    if (snapshot) {
++      this.collection.set(document.uri, snapshot.diagnostics);
++    } else if (isChangelog(document)) {
++      this.collection.delete(document.uri);
++    }
++  }
+ }
+diff --git a/code-actions-sample/src/extension.ts b/code-actions-sample/src/extension.ts
+index 8f57e233b356e7d2eddec3ee394e5d5248311056..8e2f311938b823deb6d9cc285bd6ecabe98c583f 100644
+--- a/code-actions-sample/src/extension.ts
++++ b/code-actions-sample/src/extension.ts
+@@ -1,11 +1,17 @@
+ import * as vscode from 'vscode';
+ import { ReleaseQuickFix } from './releaseQuickFix';
+-import { subscribeToDocumentChanges } from './diagnostics';
++import { ReleaseSidebar } from './releaseSidebar';
++import { ReleaseDiagnostics } from './diagnostics';
++import { registerWorkspaceScan } from './workspaceScan';
+ 
+ export function activate(context: vscode.ExtensionContext): void {
+-  const collection = vscode.languages.createDiagnosticCollection('release-checklist');
+-  context.subscriptions.push(collection);
+-  subscribeToDocumentChanges(context, collection);
++  const diagnostics = new ReleaseDiagnostics();
++  context.subscriptions.push(diagnostics, registerWorkspaceScan(diagnostics));
++  const sidebar = new ReleaseSidebar();
++  context.subscriptions.push(
++    sidebar,
++    vscode.window.registerTreeDataProvider('release-checklist', sidebar),
++  );
+   context.subscriptions.push(vscode.languages.registerCodeActionsProvider(
+     { language: 'markdown' },
+     new ReleaseQuickFix(),
+diff --git a/code-actions-sample/src/releaseSidebar.ts b/code-actions-sample/src/releaseSidebar.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..146219f76e158cc8dfec860b8efb5b3cbd036ee5
+--- /dev/null
++++ b/code-actions-sample/src/releaseSidebar.ts
+@@ -0,0 +1,88 @@
++import * as vscode from 'vscode';
++import { releaseSource } from './diagnostics';
++
++interface FileNode {
++  kind: 'file';
++  uri: vscode.Uri;
++  diagnostics: readonly vscode.Diagnostic[];
++}
++
++interface ProblemNode {
++  kind: 'problem';
++  uri: vscode.Uri;
++  diagnostic: vscode.Diagnostic;
++}
++
++type ReleaseNode = FileNode | ProblemNode;
++
++export class ReleaseSidebar implements vscode.TreeDataProvider<ReleaseNode>, vscode.Disposable {
++  private readonly changed = new vscode.EventEmitter<void>();
++  readonly onDidChangeTreeData = this.changed.event;
++
++  private readonly subscription = vscode.languages.onDidChangeDiagnostics(({ uris }) => {
++    if (uris.some((uri) => /(?:^|\/)CHANGELOG\.md$/i.test(uri.path))) {
++      this.changed.fire();
++    }
++  });
++
++  getChildren(node?: ReleaseNode): ReleaseNode[] {
++    if (node?.kind === 'problem') {
++      return [];
++    }
++    if (node?.kind === 'file') {
++      return node.diagnostics.map((diagnostic) => ({
++        kind: 'problem',
++        uri: node.uri,
++        diagnostic,
++      }));
++    }
++
++    const files: FileNode[] = [];
++    for (const [uri, diagnostics] of vscode.languages.getDiagnostics()) {
++      const findings = diagnostics
++        .filter(({ source }) => source === releaseSource)
++        .sort((a, b) => a.range.start.compareTo(b.range.start));
++      if (findings.length) {
++        files.push({ kind: 'file', uri, diagnostics: findings });
++      }
++    }
++    return files.sort((a, b) => this.relativePath(a.uri).localeCompare(this.relativePath(b.uri)));
++  }
++
++  getTreeItem(node: ReleaseNode): vscode.TreeItem {
++    if (node.kind === 'file') {
++      const label = this.relativePath(node.uri);
++      const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Expanded);
++      item.id = 'file:' + node.uri.toString();
++      item.resourceUri = node.uri;
++      item.description = node.diagnostics.length === 1 ? '1 issue' : `${node.diagnostics.length} issues`;
++      item.tooltip = label;
++      return item;
++    }
++
++    const { uri, diagnostic } = node;
++    const line = diagnostic.range.start.line + 1;
++    const item = new vscode.TreeItem(diagnostic.message);
++    item.id = `issue:${uri.toString()}:${diagnostic.code}:${line}`;
++    item.description = `Line ${line}`;
++    item.tooltip = `${this.relativePath(uri)}:${line}`;
++    item.iconPath = new vscode.ThemeIcon(
++      diagnostic.severity === vscode.DiagnosticSeverity.Error ? 'error' : 'warning',
++    );
++    item.command = {
++      command: 'vscode.open',
++      title: 'Open changelog issue',
++      arguments: [uri, { selection: diagnostic.range }],
++    };
++    return item;
++  }
++
++  dispose(): void {
++    this.subscription.dispose();
++    this.changed.dispose();
++  }
++
++  private relativePath(uri: vscode.Uri): string {
++    return vscode.workspace.asRelativePath(uri);
++  }
++}
+diff --git a/code-actions-sample/src/workspaceScan.ts b/code-actions-sample/src/workspaceScan.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..3b3db438129885816b19fbf2710c929761bc9ff4
+--- /dev/null
++++ b/code-actions-sample/src/workspaceScan.ts
+@@ -0,0 +1,81 @@
++import * as vscode from 'vscode';
++import { diagnosticsForText, ReleaseDiagnostics, ScanEntry } from './diagnostics';
++
++export const scanCommand = 'releaseChecklist.scanWorkspace';
++const maxFiles = 200;
++const maxBytes = 1024 * 1024;
++
++export interface ScanSummary {
++  scanned: number;
++  skipped: number;
++  limited: boolean;
++}
++
++export function registerWorkspaceScan(diagnostics: ReleaseDiagnostics): vscode.Disposable {
++  let busy = false;
++  return vscode.commands.registerCommand(scanCommand, async (): Promise<ScanSummary | undefined> => {
++    if (busy) {
++      return;
++    }
++    if (!vscode.workspace.workspaceFolders?.length) {
++      void vscode.window.showInformationMessage('Open a workspace folder to scan changelogs.');
++      return;
++    }
++
++    busy = true;
++    try {
++      const result = await vscode.window.withProgress({
++        location: vscode.ProgressLocation.Notification,
++        title: 'Scanning workspace changelogs',
++        cancellable: true,
++      }, async (progress, token) => {
++        const files = await vscode.workspace.findFiles(
++          '**/[Cc][Hh][Aa][Nn][Gg][Ee][Ll][Oo][Gg].[Mm][Dd]',
++          '**/{node_modules,.git,vendor}/**',
++          maxFiles + 1,
++          token,
++        );
++        const entries: ScanEntry[] = [];
++        let skipped = 0;
++        const batch = files.slice(0, maxFiles);
++        for (const uri of batch) {
++          if (token.isCancellationRequested) {
++            return;
++          }
++          progress.report({
++            message: vscode.workspace.asRelativePath(uri),
++            increment: 100 / batch.length,
++          });
++          try {
++            const info = await vscode.workspace.fs.stat(uri);
++            if (info.size > maxBytes) {
++              skipped++;
++              continue;
++            }
++            const bytes = await vscode.workspace.fs.readFile(uri);
++            const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
++            entries.push({ uri, diagnostics: diagnosticsForText(text) });
++          } catch {
++            skipped++;
++          }
++        }
++        if (token.isCancellationRequested) {
++          return;
++        }
++        diagnostics.replaceWorkspaceScan(entries);
++        return { scanned: entries.length, skipped, limited: files.length > maxFiles };
++      });
++      if (result) {
++        const limit = result.limited ? ' The 200-file limit was reached.' : '';
++        void vscode.window.showInformationMessage(
++          `Scanned ${result.scanned} changelog(s). Skipped ${result.skipped}.${limit}`,
++        );
++      }
++      return result;
++    } catch (error) {
++      void vscode.window.showErrorMessage(`Changelog scan failed: ${String(error)}`);
++    } finally {
++      busy = false;
++    }
++  });
++}
+diff --git a/code-actions-sample/tests/extension-host.cjs b/code-actions-sample/tests/extension-host.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9168ba37354117d695b5bb7aa12aeb18b085b45c
+--- /dev/null
++++ b/code-actions-sample/tests/extension-host.cjs
+@@ -0,0 +1,78 @@
++/* global require, exports, console */
++/* eslint-disable @typescript-eslint/no-require-imports -- The host loads this CommonJS entry. */
++const assert = require('node:assert/strict');
++const { promises: fs } = require('node:fs');
++const { join } = require('node:path');
++const vscode = require('vscode');
++const { ReleaseSidebar } = require('../out/releaseSidebar.js');
++const { scanCommand } = require('../out/workspaceScan.js');
++
++function issueCodes(uri) {
++  return vscode.languages.getDiagnostics(uri)
++    .filter(({ source }) => source === 'Release Checklist')
++    .map(({ code }) => code);
++}
++
++exports.run = async function run() {
++  const source = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
++  assert.ok(source, 'Open the sample in the integration-test host.');
++  const root = await fs.mkdtemp(join(source, 'release-host-'));
++  const sidebar = new ReleaseSidebar();
++
++  async function changelog(folder, text) {
++    const directory = join(root, folder);
++    await fs.mkdir(directory, { recursive: true });
++    const filename = join(directory, 'CHANGELOG.md');
++    await fs.writeFile(filename, text);
++    return vscode.Uri.file(filename);
++  }
++
++  try {
++    const missing = await changelog('apps/web', '# Changelog\n\n## [1.0.0]\n');
++    const duplicate = await changelog('packages/billing', '# Changelog\n\n## [Unreleased]\n\n## Unreleased\n');
++    const valid = await changelog('apps/desktop', '# Changelog\n\n## [Unreleased]\n');
++    const ignored = await changelog('node_modules/vendor', '# Changelog\n');
++    const scan = await vscode.commands.executeCommand(scanCommand);
++    assert.ok(scan && scan.scanned >= 3);
++    assert.deepEqual(issueCodes(missing), ['missing-unreleased']);
++    assert.deepEqual(issueCodes(duplicate), ['duplicate-unreleased']);
++    assert.deepEqual(issueCodes(valid), []);
++    assert.deepEqual(issueCodes(ignored), []);
++    console.log('PASS: scan reports unopened files and skips excluded files');
++
++    const fileNodes = sidebar.getChildren()
++      .filter((node) => node.uri.fsPath.startsWith(root))
++      .map((node) => sidebar.getTreeItem(node));
++    assert.deepEqual(fileNodes.map((item) => item.label.split('/').slice(-3).join('/')),
++      ['apps/web/CHANGELOG.md', 'packages/billing/CHANGELOG.md']);
++    const billing = sidebar.getChildren().find((node) => node.uri.toString() === duplicate.toString());
++    const child = sidebar.getTreeItem(sidebar.getChildren(billing)[0]);
++    assert.equal(child.command.command, 'vscode.open');
++    assert.equal(child.command.arguments[1].selection.start.line, 4);
++    console.log('PASS: groups are sorted and child open actions carry the correct range');
++
++    const document = await vscode.workspace.openTextDocument(missing);
++    await vscode.window.showTextDocument(document);
++    const actions = await vscode.commands.executeCommand(
++      'vscode.executeCodeActionProvider', missing, document.lineAt(0).range,
++      vscode.CodeActionKind.QuickFix.value,
++    );
++    const fix = actions.find(({ title }) => title === 'Add Unreleased section');
++    assert.ok(fix?.edit);
++    assert.ok(await vscode.workspace.applyEdit(fix.edit));
++    await vscode.commands.executeCommand(scanCommand);
++    assert.deepEqual(issueCodes(missing), [], 'Unsaved editor content takes precedence.');
++    assert.ok(await document.save());
++    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
++    assert.deepEqual(issueCodes(missing), []);
++    console.log('PASS: live Quick Fix wins during rescan and saved results stay current');
++
++    await fs.rm(duplicate.fsPath);
++    await vscode.commands.executeCommand(scanCommand);
++    assert.deepEqual(issueCodes(duplicate), []);
++    console.log('PASS: rescanning removes findings for a deleted file');
++  } finally {
++    sidebar.dispose();
++    await fs.rm(root, { recursive: true, force: true });
++  }
++};

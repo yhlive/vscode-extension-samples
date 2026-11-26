@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
 import { ReleaseQuickFix } from './releaseQuickFix';
-import { subscribeToDocumentChanges } from './diagnostics';
+import { ReleaseSidebar } from './releaseSidebar';
+import { ReleaseDiagnostics } from './diagnostics';
+import { registerWrokspaceScan } from './workspaceScan';
 
 export function activate(context: vscode.ExtensionContext) {
-	const collection = vscode.languages.createDiagnosticCollection('release-checklist');
-	context.subscriptions.push(collection);
+	const diagnostics = new ReleaseDiagnostics();
+	context.subscriptions.push(diagnostics, registerWrokspaceScan(diagnostics));
 	const provider = new ReleaseQuickFix();
 	context.subscriptions.push(
 		vscode.languages.registerCodeActionsProvider(
@@ -17,5 +19,10 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		)
 	);
-	subscribeToDocumentChanges(context, collection);
+	// subscribeToDocumentChanges(context, collection);
+	const sidebar = new ReleaseSidebar();
+	context.subscriptions.push(
+		sidebar,
+		vscode.window.registerTreeDataProvider('release-checklist', sidebar)
+	);
 }
